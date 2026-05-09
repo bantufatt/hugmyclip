@@ -10,12 +10,10 @@ license: mit
 secrets:
   - name: HF_TOKEN
     description: Hugging Face API token for database backup.
-  - name: CLAUDE_CODE_OAUTH_TOKEN
-    description: Anthropic Claude API key for Claude-powered agents.
+  - name: NVAPI_KEYS
+    description: Comma-separated NVIDIA API keys for OpenCode-powered agents.
   - name: GEMINI_API_KEY
     description: Google Gemini API key for Gemini-powered agents.
-  - name: OPENAI_API_KEY
-    description: OpenAI API key for GPT-powered agents.
   - name: CLOUDFLARE_WORKERS_TOKEN
     description: "Cloudflare API token — auto-creates a Worker proxy and KeepAlive monitor."
 ---
@@ -26,7 +24,7 @@ secrets:
 [![HF Space](https://img.shields.io/badge/🤗%20HuggingFace-Space-blue?style=flat-square)](https://huggingface.co/spaces/somratpro/HuggingClip)
 [![Paperclip](https://img.shields.io/badge/Paperclip-AI%20Agents-purple?style=flat-square)](https://paperclip.ing)
 
-**Run your own AI agent orchestration platform — free, no server needed.** HuggingClip deploys [Paperclip](https://paperclip.ing) on Hugging Face Spaces, giving you a persistent AI agent platform that works with any LLM (Claude, GPT, Gemini, etc.). Deploy in minutes on the free HF Spaces tier (2 vCPU, 16GB RAM) with automatic database backup to a private HF Dataset so your agents, tasks, and conversations survive restarts.
+**Run your own AI agent orchestration platform — free, no server needed.** HuggingClip deploys [Paperclip](https://paperclip.ing) on Hugging Face Spaces, giving you a persistent AI agent platform with NVIDIA models via OpenCode and optional Gemini support. Deploy in minutes on the free HF Spaces tier (2 vCPU, 16GB RAM) with automatic database backup to a private HF Dataset so your agents, tasks, and conversations survive restarts.
 
 ## Table of Contents
 
@@ -46,7 +44,7 @@ secrets:
 
 ## ✨ Features
 
-- 🤖 **Any LLM:** Use Claude, OpenAI GPT, Google Gemini, and more — just set the API key.
+- 🤖 **NVIDIA via OpenCode:** Run OpenCode-backed agents with one or more NVIDIA API keys, plus optional Gemini support.
 - ⚡ **One-click deploy:** Duplicate the Space and add your API key — nothing else needed to get started.
 - 💾 **Persistent Database:** PostgreSQL database auto-backed up to a private HF Dataset and restored on every restart — no data loss.
 - 📊 **Visual Dashboard:** Real-time status dashboard at `/` with Paperclip service health, backup status, and uptime.
@@ -67,9 +65,8 @@ In your new Space's **Settings → Variables and secrets**, add at least one LLM
 
 | Secret | Description |
 | :--- | :--- |
-| `ANTHROPIC_API_KEY` | Claude API key from [console.anthropic.com](https://console.anthropic.com) |
+| `NVAPI_KEYS` | Comma-separated NVIDIA keys from [build.nvidia.com](https://build.nvidia.com) |
 | `GEMINI_API_KEY` | Google AI Studio key from [ai.google.dev](https://ai.google.dev) |
-| `OPENAI_API_KEY` | OpenAI key from [platform.openai.com](https://platform.openai.com) |
 
 > [!TIP]
 > Add `HF_TOKEN` (a token with write access to your account) to enable database backup persistence. Without it, data is lost on restart.
@@ -90,9 +87,8 @@ No secrets are strictly required to start, but you need at least one LLM key to 
 
 | Variable | Description |
 | :--- | :--- |
-| `ANTHROPIC_API_KEY` | Claude agents |
+| `NVAPI_KEYS` | OpenCode agents using NVIDIA models; supports multiple comma-separated keys |
 | `GEMINI_API_KEY` | Gemini agents |
-| `OPENAI_API_KEY` | OpenAI agents |
 
 ### Recommended
 
@@ -111,18 +107,19 @@ No secrets are strictly required to start, but you need at least one LLM key to 
 | `PAPERCLIP_AGENT_JWT_SECRET` | auto-generated | Agent JWT secret (auto-persisted on first boot) |
 | `SYNC_MAX_FILE_BYTES` | `52428800` | Max backup size in bytes (50MB default) |
 | `CLOUDFLARE_KEEPALIVE_ENABLED` | `true` | Set to `false` to disable the automatic Cloudflare KeepAlive worker |
+| `NVIDIA_BASE_URL` | — | Optional custom NVIDIA/OpenCode endpoint, for example a local NIM server |
 
 ## 🤖 LLM Providers
 
-Set the relevant API key and Paperclip will use it automatically when you configure agents:
+Set the relevant provider secret and Paperclip will use it automatically when you configure agents:
 
 | Provider | Secret | Get Key |
 | :--- | :--- | :--- |
-| **Anthropic (Claude)** | `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) |
+| **NVIDIA via OpenCode** | `NVAPI_KEYS` | [build.nvidia.com](https://build.nvidia.com) |
 | **Google (Gemini)** | `GEMINI_API_KEY` | [ai.google.dev](https://ai.google.dev) |
-| **OpenAI (GPT)** | `OPENAI_API_KEY` | [platform.openai.com](https://platform.openai.com) |
+| **NVIDIA NIM (optional)** | `NVIDIA_BASE_URL` | Custom OpenAI-compatible NVIDIA endpoint |
 
-You can add multiple providers — Paperclip lets you choose the model per-agent.
+`NVAPI_KEYS` accepts one or more comma-separated NVIDIA API keys. HuggingClip writes them into the OpenCode runtime config and rotates them across invocations.
 
 ## 🌐 Cloudflare Proxy *(Optional)*
 
@@ -171,7 +168,7 @@ Your Space will automatically be kept awake by a background Cloudflare Worker wh
 git clone https://github.com/somratpro/huggingclip.git
 cd huggingclip
 cp .env.example .env
-# Edit .env with your API keys and HF_TOKEN
+# Edit .env with your NVAPI_KEYS, optional GEMINI_API_KEY, and HF_TOKEN
 ```
 
 **With Docker:**
@@ -180,7 +177,7 @@ cp .env.example .env
 docker build -t huggingclip .
 docker run -p 7861:7861 \
   -e HF_TOKEN=hf_xxxx \
-  -e ANTHROPIC_API_KEY=sk-ant-xxxx \
+  -e NVAPI_KEYS=nvapi-xxxx,nvapi-yyyy \
   -v paperclip_data:/paperclip \
   huggingclip
 ```
@@ -230,7 +227,7 @@ HuggingClip/
 ## 🐛 Troubleshooting
 
 **No LLM providers configured warning**
-Set at least one of `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, or `OPENAI_API_KEY` in Space secrets.
+Set at least one of `NVAPI_KEYS`, `GEMINI_API_KEY`, or `NVIDIA_BASE_URL` in Space secrets/variables.
 
 **Admin setup link not showing**
 Check Space logs — if Paperclip started but admin setup link is missing, the bootstrap ran but found an existing account. Log in at `/app/`.

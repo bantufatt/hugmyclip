@@ -17,6 +17,7 @@ export PAPERCLIP_CONFIG="${PAPERCLIP_CONFIG:-${PAPERCLIP_HOME}/instances/default
 export PAPERCLIP_TELEMETRY_DISABLED="${PAPERCLIP_TELEMETRY_DISABLED:-1}"
 export DO_NOT_TRACK="${DO_NOT_TRACK:-1}"
 export OPENCODE_ALLOW_ALL_MODELS="${OPENCODE_ALLOW_ALL_MODELS:-true}"
+export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-/home/paperclip/.config}"
 export SYNC_INTERVAL="${SYNC_INTERVAL:-3600}"
 export SYNC_MAX_FILE_BYTES="${SYNC_MAX_FILE_BYTES:-52428800}"
 export BACKUP_DATASET_NAME="${BACKUP_DATASET_NAME:-huggingclip-backup}"
@@ -35,13 +36,32 @@ export PAPERCLIP_ALLOWED_HOSTNAMES="${PAPERCLIP_ALLOWED_HOSTNAMES:-${_ALLOWED}}"
 
 # LLM API keys
 export GEMINI_API_KEY="${GEMINI_API_KEY:-}"
-export OPENAI_API_KEY="${OPENAI_API_KEY:-}"
-# Anthropic/Claude Code — set one or neither:
-#   CLAUDE_CODE_OAUTH_TOKEN : long-lived OAuth token (sk-ant-oat01-..., 1 year)
-#                             Generate at: claude.ai/settings → "Claude Code" → "Create token"
-#   ANTHROPIC_API_KEY       : API key mode (sk-ant-api03-..., pay-per-use)
-export CLAUDE_CODE_OAUTH_TOKEN="${CLAUDE_CODE_OAUTH_TOKEN:-}"
-export ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}"
+export NVAPI_KEYS="${NVAPI_KEYS:-}"
+export NVIDIA_API_KEY="${NVIDIA_API_KEY:-}"
+export NVIDIA_BASE_URL="${NVIDIA_BASE_URL:-}"
+
+mapfile -t NVIDIA_API_KEYS_PARSED < <(
+    python3 <<'PYEOF'
+import os
+
+values = []
+for name in ("NVAPI_KEYS", "NVIDIA_API_KEY"):
+    raw = os.environ.get(name, "")
+    if raw:
+        values.extend(raw.split(","))
+
+for value in values:
+    value = value.strip()
+    if value:
+        print(value)
+PYEOF
+)
+NVIDIA_KEY_COUNT=${#NVIDIA_API_KEYS_PARSED[@]}
+
+if { [ -n "${NVAPI_KEYS:-}" ] || [ -n "${NVIDIA_API_KEY:-}" ]; } && [ "${NVIDIA_KEY_COUNT}" -eq 0 ]; then
+    echo "ERROR: NVAPI_KEYS/NVIDIA_API_KEY is set but no usable NVIDIA API keys were found"
+    exit 1
+fi
 
 mkdir -p "${PAPERCLIP_HOME}"
 
@@ -69,9 +89,9 @@ if [ -z "${PAPERCLIP_AGENT_JWT_SECRET:-}" ]; then
 fi
 
 # ── Validate LLM providers ───────────────────────────────────────────────────
-if [ -z "${GEMINI_API_KEY:-}" ] && [ -z "${ANTHROPIC_API_KEY:-}" ] && [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] && [ -z "${OPENAI_API_KEY:-}" ]; then
+if [ -z "${GEMINI_API_KEY:-}" ] && [ "${NVIDIA_KEY_COUNT}" -eq 0 ] && [ -z "${NVIDIA_BASE_URL:-}" ]; then
     echo "⚠️  WARNING: No LLM provider configured"
-    echo "   Set at least one of: GEMINI_API_KEY, CLAUDE_CODE_OAUTH_TOKEN, ANTHROPIC_API_KEY, OPENAI_API_KEY"
+    echo "   Set at least one of: GEMINI_API_KEY, NVAPI_KEYS, NVIDIA_BASE_URL"
     echo "   Agents will fail to run without an LLM provider"
     echo ""
 fi
@@ -174,8 +194,8 @@ if [ -f "${_CF_ENV}" ]; then
 fi
 
 # ── Cloudflare proxy flag (applied inline to Paperclip only, not exported globally)
-# Only enable if proxy is actually configured. Otherwise agent CLIs (claude, gemini,
-# codex) inherit it via subprocess env and break their HTTP requests.
+# Only enable if proxy is actually configured. Otherwise agent runtimes inherit
+# it via subprocess env and break their HTTP requests.
 _CF_NODE_OPTS=""
 if [ -n "${CLOUDFLARE_PROXY_URL:-}" ] && [ -f /app/cloudflare-proxy.js ]; then
     _CF_NODE_OPTS="--require /app/cloudflare-proxy.js"
@@ -236,7 +256,6 @@ public_url = os.environ.get("PAPERCLIP_PUBLIC_URL", f"http://localhost:{port}")
 
 config = {
     "$meta": {"version": 1, "updatedAt": "2024-01-01T00:00:00Z", "source": "onboard"},
-    "llm": {"provider": "claude", "apiKey": ""},
     "database": {
         "mode": "postgres",
         "connectionString": os.environ.get("DATABASE_URL", "postgres://postgres:paperclip@localhost:5432/paperclip")
@@ -299,32 +318,61 @@ cleanup() {
 }
 trap cleanup SIGTERM SIGINT
 
-# ── Codex API key config ─────────────────────────────────────────────────────
-# forced_login_method="api" alone isn't enough — codex reads the key from its
-# credentials store, not from OPENAI_API_KEY env var (which Paperclip may not
-# pass to subprocesses). Workaround: custom provider with experimental_bearer_token
-# baked in. Can't use [model_providers.openai] — reserved built-in ID.
-if [ -n "${OPENAI_API_KEY:-}" ]; then
-    mkdir -p /home/paperclip/.codex
-    cat > /home/paperclip/.codex/config.toml <<TOMLEOF
-forced_login_method = "api"
-model_provider = "openai-hf"
+# ── OpenCode NVIDIA config ───────────────────────────────────────────────────
+OPENCODE_CONFIG_DIR="${XDG_CONFIG_HOME}/opencode"
+OPENCODE_CONFIG_FILE="${OPENCODE_CONFIG_DIR}/opencode.json"
+OPENCODE_NVIDIA_KEYS_FILE="${OPENCODE_CONFIG_DIR}/nvidia-api-keys.txt"
+OPENCODE_NVIDIA_KEY_STATE_FILE="${OPENCODE_CONFIG_DIR}/nvidia-api-key-index"
+mkdir -p "${OPENCODE_CONFIG_DIR}"
 
-[model_providers.openai-hf]
-name = "OpenAI"
-base_url = "https://api.openai.com/v1"
-experimental_bearer_token = "${OPENAI_API_KEY}"
-requires_openai_auth = false
-TOMLEOF
-    chmod 600 /home/paperclip/.codex/config.toml
-    chown -R paperclip:paperclip /home/paperclip/.codex
+if [ "${NVIDIA_KEY_COUNT}" -gt 0 ]; then
+    printf '%s\n' "${NVIDIA_API_KEYS_PARSED[@]}" > "${OPENCODE_NVIDIA_KEYS_FILE}"
+    chmod 600 "${OPENCODE_NVIDIA_KEYS_FILE}"
+    if [ ! -f "${OPENCODE_NVIDIA_KEY_STATE_FILE}" ]; then
+        printf '0\n' > "${OPENCODE_NVIDIA_KEY_STATE_FILE}"
+    fi
+    chmod 600 "${OPENCODE_NVIDIA_KEY_STATE_FILE}"
+    export OPENCODE_NVIDIA_KEYS_FILE
+    export OPENCODE_NVIDIA_KEY_STATE_FILE
+else
+    rm -f "${OPENCODE_NVIDIA_KEYS_FILE}" "${OPENCODE_NVIDIA_KEY_STATE_FILE}"
+fi
+
+if [ "${NVIDIA_KEY_COUNT}" -gt 0 ] || [ -n "${NVIDIA_BASE_URL:-}" ]; then
+    export OPENCODE_CONFIG_FILE
+    python3 <<'PYEOF'
+import json
+import os
+
+provider = {"nvidia": {}}
+base_url = os.environ.get("NVIDIA_BASE_URL", "").strip()
+if base_url:
+    provider["nvidia"]["options"] = {"baseURL": base_url}
+
+config = {
+    "$schema": "https://opencode.ai/config.json",
+    "provider": {
+        **provider,
+        "anthropic": {"disabled": True},
+        "openai": {"disabled": True},
+    },
+}
+
+config_path = os.environ["OPENCODE_CONFIG_FILE"]
+os.makedirs(os.path.dirname(config_path), exist_ok=True)
+with open(config_path, "w", encoding="utf-8") as f:
+    json.dump(config, f, indent=2)
+    f.write("\n")
+PYEOF
+    chmod 600 "${OPENCODE_CONFIG_FILE}"
+else
+    rm -f "${OPENCODE_CONFIG_FILE}"
 fi
 
 # ── Ensure paperclip user owns runtime dirs ──────────────────────────────────
-chown -R paperclip:paperclip /app /paperclip 2>/dev/null || true
+chown -R paperclip:paperclip /app /paperclip /home/paperclip/.config 2>/dev/null || true
 
 # ── Launch Paperclip as non-root ──────────────────────────────────────────────
-# Agent CLIs (claude, gemini, codex) refuse --dangerously-skip-permissions as root.
 # Run Paperclip as 'paperclip' user so all spawned subprocesses are non-root.
 echo "Starting Paperclip..."
 HOME=/home/paperclip NODE_OPTIONS="${_CF_NODE_OPTS}" runuser -u paperclip -- \
@@ -373,4 +421,3 @@ echo "  API              : http://localhost:7861/api/"
 echo ""
 
 wait $PAPERCLIP_PID
-

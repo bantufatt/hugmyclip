@@ -25,7 +25,7 @@ We will respond within 48 hours and aim to patch critical issues within 7 days.
 
 - **Never commit secrets to git** — use HF Space secrets or environment variables
 - `HF_TOKEN`: Store as HF Space secret, not in code
-- `ANTHROPIC_API_KEY`, `LLM_API_KEY`: Same — HF Space secrets only
+- `NVAPI_KEYS`, `GEMINI_API_KEY`: Same — HF Space secrets only
 - `BETTER_AUTH_SECRET`: Generate strong random secret (`openssl rand -base64 32`)
 - Rotate tokens if accidentally exposed
 

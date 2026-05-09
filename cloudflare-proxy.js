@@ -32,6 +32,7 @@ const DEFAULT_PROXY_DOMAINS = [
   "open.tiktokapis.com", "oauth.reddit.com",
   "youtube.com", "www.youtube.com",
   "api.openai.com",
+  "build.nvidia.com", "integrate.api.nvidia.com",
   "api.resend.com", "api.sendgrid.com", "api.mailgun.net",
   "googleapis.com", "google.com", "googleusercontent.com", "gstatic.com",
 ];

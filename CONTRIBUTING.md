@@ -28,7 +28,7 @@ cd HuggingClip
 
 # Configure
 cp .env.example .env
-# Edit .env with your HF_TOKEN and any provider keys
+# Edit .env with your HF_TOKEN, NVAPI_KEYS, and any other provider keys
 
 # Build and start
 docker-compose up --build

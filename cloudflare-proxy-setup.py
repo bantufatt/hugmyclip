@@ -34,6 +34,8 @@ DEFAULT_ALLOWED = [
     "www.youtube.com",
     # AI APIs
     "api.openai.com",
+    "build.nvidia.com",
+    "integrate.api.nvidia.com",
     # Email HTTP APIs (SMTP ports are blocked; use these instead)
     "api.resend.com",
     "api.sendgrid.com",

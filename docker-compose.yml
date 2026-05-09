@@ -44,9 +44,9 @@ services:
       PAPERCLIP_DEPLOYMENT_MODE: local
 
       # Agent providers (add your keys here)
-      # ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # NVAPI_KEYS: ${NVAPI_KEYS:-}
       # GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      # OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      # NVIDIA_BASE_URL: ${NVIDIA_BASE_URL:-}
 
       # HF Backup (optional for local testing)
       HF_TOKEN: ${HF_TOKEN:-}
