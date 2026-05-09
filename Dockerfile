@@ -55,31 +55,36 @@ RUN mkdir -p /var/run/postgresql && chown postgres:postgres /var/run/postgresql
 RUN npm init -y && npm install express@4 cors morgan
 
 # Install agent CLIs globally
-RUN npm install -g @google/gemini-cli @anthropic-ai/claude-code @openai/codex
+RUN npm install -g @google/gemini-cli opencode-ai
 
-# Claude Code wrapper — auth mode selection:
-#   CLAUDE_CODE_OAUTH_TOKEN set → long-lived subscription OAuth token (sk-ant-oat01-...)
-#                                 takes priority; unset API key to avoid conflict
-#   ANTHROPIC_API_KEY set       → API key mode (pay-per-use)
-#   Neither set                 → uses stored credentials in ~/.claude/
-# Also drops cloudflare NODE_OPTIONS and caps heap size.
-RUN if [ -e /usr/local/bin/claude ]; then \
-    mv /usr/local/bin/claude /usr/local/bin/claude-real && \
+# OpenCode wrapper — rotates NVIDIA keys per invocation when NVAPI_KEYS is configured.
+RUN if [ -e /usr/local/bin/opencode ]; then \
+    mv /usr/local/bin/opencode /usr/local/bin/opencode-real && \
     { \
       echo '#!/bin/sh'; \
+      echo 'set -eu'; \
       echo 'unset NODE_OPTIONS'; \
-      echo '[ -n "$CLAUDE_CODE_OAUTH_TOKEN" ] && unset ANTHROPIC_API_KEY'; \
-      echo 'export NODE_OPTIONS="--max-old-space-size=4096 --no-deprecation --no-warnings"'; \
-      echo 'exec /usr/local/bin/claude-real "$@"'; \
-    } > /usr/local/bin/claude && \
-    chmod +x /usr/local/bin/claude; \
-fi
-
-# Codex wrapper — drops cloudflare NODE_OPTIONS, caps heap size
-RUN if [ -e /usr/local/bin/codex ]; then \
-    mv /usr/local/bin/codex /usr/local/bin/codex-real && \
-    printf '#!/bin/sh\nunset NODE_OPTIONS\nexport NODE_OPTIONS="--max-old-space-size=4096 --no-deprecation --no-warnings"\nexec /usr/local/bin/codex-real "$@"\n' > /usr/local/bin/codex && \
-    chmod +x /usr/local/bin/codex; \
+      echo 'KEY_FILE="${OPENCODE_NVIDIA_KEYS_FILE:-$HOME/.config/opencode/nvidia-api-keys.txt}"'; \
+      echo 'STATE_FILE="${OPENCODE_NVIDIA_KEY_STATE_FILE:-$HOME/.config/opencode/nvidia-api-key-index}"'; \
+      echo 'if [ -z "${NVIDIA_API_KEY:-}" ] && [ -f "$KEY_FILE" ]; then'; \
+      echo '  # Count non-empty key lines after start.sh normalization.'; \
+      echo '  COUNT=$(grep -c -v -e "^[[:space:]]*$" "$KEY_FILE" 2>/dev/null || true)'; \
+      echo '  if [ "${COUNT:-0}" -gt 0 ]; then'; \
+      echo '    KEY_INDEX=$(cat "$STATE_FILE" 2>/dev/null || echo 0)'; \
+      echo '    # Reset malformed state to 0 so key rotation can recover safely.'; \
+      echo '    case "$KEY_INDEX" in (*[!0-9]*|"") KEY_INDEX=0;; esac'; \
+      echo '    SELECT=$((KEY_INDEX % COUNT + 1))'; \
+      echo '    NVIDIA_API_KEY=$(sed -n "${SELECT}p" "$KEY_FILE" | tr -d "\\r")'; \
+      echo '    if [ -n "$NVIDIA_API_KEY" ]; then'; \
+      echo '      export NVIDIA_API_KEY'; \
+      echo '      NEXT=$(((KEY_INDEX + 1) % COUNT))'; \
+      echo '      umask 077 && printf "%s\\n" "$NEXT" > "$STATE_FILE"'; \
+      echo '    fi'; \
+      echo '  fi'; \
+      echo 'fi'; \
+      echo 'exec /usr/local/bin/opencode-real "$@"'; \
+    } > /usr/local/bin/opencode && \
+    chmod +x /usr/local/bin/opencode; \
 fi
 
 # Gemini wrapper — fix for "Failed to relaunch the CLI process":
@@ -131,7 +136,6 @@ COPY cloudflare-keepalive-setup.py /app/
 RUN chmod +x /app/start.sh /app/cloudflare-keepalive-setup.py
 
 # Create non-root user for running Paperclip + agent CLIs
-# Claude Code refuses --dangerously-skip-permissions when running as root
 # Note: /app files stay root-owned (644/755 defaults = readable by all).
 # /paperclip runtime dir is chowned to paperclip in start.sh after restore.
 RUN useradd -m -u 1001 -s /bin/bash paperclip && \
