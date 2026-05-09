@@ -1,0 +1,92 @@
+version: '3.8'
+
+services:
+  # PostgreSQL database
+  postgres:
+    image: postgres:16-alpine
+    container_name: huggingclip-postgres
+    environment:
+      POSTGRES_DB: paperclip
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: paperclip
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - huggingclip-network
+
+  # HuggingClip application
+  paperclip:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: huggingclip-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Database
+      DATABASE_URL: postgres://postgres:paperclip@postgres:5432/paperclip
+
+      # Paperclip config
+      PORT: 3100
+      SERVE_UI: "true"
+      NODE_ENV: development
+      HOST: 0.0.0.0
+      PAPERCLIP_HOME: /paperclip
+      PAPERCLIP_DEPLOYMENT_MODE: local
+
+      # Agent providers (add your keys here)
+      # ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      # OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+
+      # HF Backup (optional for local testing)
+      HF_TOKEN: ${HF_TOKEN:-}
+      HF_USERNAME: ${HF_USERNAME:-}
+      SYNC_INTERVAL: "180"
+      BACKUP_DATASET_NAME: paperclip-backup-dev
+
+      # Cloudflare (optional)
+      # CLOUDFLARE_WORKERS_TOKEN: ${CLOUDFLARE_WORKERS_TOKEN:-}
+      # CLOUDFLARE_ACCOUNT_ID: ${CLOUDFLARE_ACCOUNT_ID:-}
+
+      # Telemetry
+      PAPERCLIP_TELEMETRY_DISABLED: "1"
+      DO_NOT_TRACK: "1"
+
+    ports:
+      - "7861:7861"  # Public health server + dashboard
+      - "3100:3100"  # Direct Paperclip access (development only)
+    volumes:
+      - paperclip_data:/paperclip
+      - ./paperclip-sync.py:/app/paperclip-sync.py
+      - ./health-server.js:/app/health-server.js
+      - ./start.sh:/app/start.sh
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7861/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+    networks:
+      - huggingclip-network
+    cap_add:
+      - NET_ADMIN  # For potential network utilities
+
+volumes:
+  postgres_data:
+    driver: local
+  paperclip_data:
+    driver: local
+
+networks:
+  huggingclip-network:
+    driver: bridge
