@@ -67,9 +67,11 @@ RUN if [ -e /usr/local/bin/opencode ]; then \
       echo 'KEY_FILE="${OPENCODE_NVIDIA_KEYS_FILE:-$HOME/.config/opencode/nvidia-api-keys.txt}"'; \
       echo 'STATE_FILE="${OPENCODE_NVIDIA_KEY_STATE_FILE:-$HOME/.config/opencode/nvidia-api-key-index}"'; \
       echo 'if [ -z "${NVIDIA_API_KEY:-}" ] && [ -f "$KEY_FILE" ]; then'; \
-      echo '  COUNT=$(grep -cve "^[[:space:]]*$" "$KEY_FILE" 2>/dev/null || true)'; \
+      echo '  # Count non-empty key lines after start.sh normalization.'; \
+      echo '  COUNT=$(grep -c -v -e "^[[:space:]]*$" "$KEY_FILE" 2>/dev/null || true)'; \
       echo '  if [ "${COUNT:-0}" -gt 0 ]; then'; \
       echo '    KEY_INDEX=$(cat "$STATE_FILE" 2>/dev/null || echo 0)'; \
+      echo '    # Reset malformed state to 0 so key rotation can recover safely.'; \
       echo '    case "$KEY_INDEX" in (*[!0-9]*|"") KEY_INDEX=0;; esac'; \
       echo '    SELECT=$((KEY_INDEX % COUNT + 1))'; \
       echo '    NVIDIA_API_KEY=$(sed -n "${SELECT}p" "$KEY_FILE" | tr -d "\\r")'; \

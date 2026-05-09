@@ -60,6 +60,7 @@ NVIDIA_KEY_COUNT=${#NVIDIA_API_KEYS_PARSED[@]}
 
 if { [ -n "${NVAPI_KEYS:-}" ] || [ -n "${NVIDIA_API_KEY:-}" ]; } && [ "${NVIDIA_KEY_COUNT}" -eq 0 ]; then
     echo "ERROR: NVAPI_KEYS/NVIDIA_API_KEY is set but no usable NVIDIA API keys were found"
+    echo "       Provide one or more non-empty comma-separated keys"
     exit 1
 fi
 
@@ -254,6 +255,8 @@ home = os.environ.get("PAPERCLIP_HOME", "/paperclip")
 port = int(os.environ.get("PORT", "3100"))
 public_url = os.environ.get("PAPERCLIP_PUBLIC_URL", f"http://localhost:{port}")
 
+# Paperclip treats llm as optional, so leave it unset here and let runtime
+# adapters provide OpenCode/Gemini configuration instead of seeding Claude/OpenAI.
 config = {
     "$meta": {"version": 1, "updatedAt": "2024-01-01T00:00:00Z", "source": "onboard"},
     "database": {
