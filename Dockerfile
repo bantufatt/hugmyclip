@@ -69,13 +69,13 @@ RUN if [ -e /usr/local/bin/opencode ]; then \
       echo 'if [ -z "${NVIDIA_API_KEY:-}" ] && [ -f "$KEY_FILE" ]; then'; \
       echo '  COUNT=$(grep -cve "^[[:space:]]*$" "$KEY_FILE" 2>/dev/null || true)'; \
       echo '  if [ "${COUNT:-0}" -gt 0 ]; then'; \
-      echo '    INDEX=$(cat "$STATE_FILE" 2>/dev/null || echo 0)'; \
-      echo '    case "$INDEX" in (*[!0-9]*|"") INDEX=0;; esac'; \
-      echo '    SELECT=$((INDEX % COUNT + 1))'; \
+      echo '    KEY_INDEX=$(cat "$STATE_FILE" 2>/dev/null || echo 0)'; \
+      echo '    case "$KEY_INDEX" in (*[!0-9]*|"") KEY_INDEX=0;; esac'; \
+      echo '    SELECT=$((KEY_INDEX % COUNT + 1))'; \
       echo '    NVIDIA_API_KEY=$(sed -n "${SELECT}p" "$KEY_FILE" | tr -d "\\r")'; \
       echo '    if [ -n "$NVIDIA_API_KEY" ]; then'; \
       echo '      export NVIDIA_API_KEY'; \
-      echo '      NEXT=$(((INDEX + 1) % COUNT))'; \
+      echo '      NEXT=$(((KEY_INDEX + 1) % COUNT))'; \
       echo '      umask 077 && printf "%s\\n" "$NEXT" > "$STATE_FILE"'; \
       echo '    fi'; \
       echo '  fi'; \
