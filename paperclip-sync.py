@@ -405,7 +405,7 @@ def sync_to_backup() -> bool:
         dump_file, success = backup_database()
         if not success or not dump_file:
             status.update({'last_error': 'Database backup failed', 'db_status': 'error',
-                           'status': 'error', 'message': 'Backup failed: pg_dump error'})
+                           'status': 'error', 'message': 'Database backup failed'})
             write_status(status)
             return False
 
@@ -413,7 +413,7 @@ def sync_to_backup() -> bool:
         tarball_file, success = create_backup_tarball(dump_file)
         if not success or not tarball_file:
             status.update({'last_error': 'Tarball creation failed', 'db_status': 'error',
-                           'status': 'error', 'message': 'Backup failed: tarball too large or I/O error'})
+                           'status': 'error', 'message': 'Tarball creation failed'})
             write_status(status)
             return False
 
