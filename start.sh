@@ -21,6 +21,11 @@ export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-/home/paperclip/.config}"
 export SYNC_INTERVAL="${SYNC_INTERVAL:-3600}"
 export SYNC_MAX_FILE_BYTES="${SYNC_MAX_FILE_BYTES:-52428800}"
 export BACKUP_DATASET_NAME="${BACKUP_DATASET_NAME:-huggingclip-backup}"
+SYNC_INTERVAL="$(printf '%s' "${SYNC_INTERVAL}" | tr -cd '0-9')"
+if [ -z "${SYNC_INTERVAL}" ] || [ "${SYNC_INTERVAL}" -lt 60 ]; then
+    SYNC_INTERVAL=60
+fi
+export SYNC_INTERVAL
 
 # Derive public URL from HF Space host
 if [ -z "${PAPERCLIP_PUBLIC_URL:-}" ] && [ -n "${SPACE_HOST:-}" ]; then

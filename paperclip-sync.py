@@ -32,7 +32,7 @@ huggingface_hub.utils.disable_progress_bars()
 # Logging: WARNING level keeps errors visible, suppresses routine INFO chatter
 logging.basicConfig(
     level=logging.WARNING,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    format='[sync] %(message)s'
 )
 logger = logging.getLogger(__name__)
 # Set our own logger to INFO so backup/restore start+finish lines still print
@@ -406,6 +406,8 @@ def sync_to_backup() -> bool:
         if not success or not dump_file:
             status['last_error'] = 'Database backup failed'
             status['db_status'] = 'error'
+            status['status'] = 'error'
+            status['message'] = 'Database backup failed'
             write_status(status)
             return False
 
@@ -414,6 +416,8 @@ def sync_to_backup() -> bool:
         if not success or not tarball_file:
             status['last_error'] = 'Tarball creation failed'
             status['db_status'] = 'error'
+            status['status'] = 'error'
+            status['message'] = 'Tarball creation failed'
             write_status(status)
             return False
 
@@ -424,6 +428,8 @@ def sync_to_backup() -> bool:
         status['last_sync_time'] = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
         status['db_status'] = 'connected' if success else 'error'
         status['last_error'] = None if success else 'Upload failed'
+        status['status'] = 'connected' if success else 'error'
+        status['message'] = 'Backup synced OK' if success else 'Backup sync failed'
         status['sync_count'] = status.get('sync_count', 0) + 1
 
         write_status(status)
@@ -439,6 +445,8 @@ def sync_to_backup() -> bool:
         logger.error(f'Backup operation failed: {e}')
         status['last_error'] = str(e)
         status['db_status'] = 'error'
+        status['status'] = 'error'
+        status['message'] = str(e)
         write_status(status)
         return False
 
@@ -455,18 +463,24 @@ def sync_from_backup() -> bool:
             # No backup exists yet (first boot) — not an error
             status['db_status'] = 'connected'
             status['last_error'] = None
+            status['status'] = 'connected'
+            status['message'] = 'No prior backup — fresh instance'
             write_status(status)
             logger.info('No prior backup — fresh instance')
             return True
         elif success:
             status['db_status'] = 'connected'
             status['last_error'] = None
+            status['status'] = 'connected'
+            status['message'] = 'Restore OK'
             write_status(status)
             logger.info('Restore OK')
             return True
         else:
             status['db_status'] = 'error'
             status['last_error'] = 'Restore failed'
+            status['status'] = 'error'
+            status['message'] = 'Restore operation failed'
             write_status(status)
             logger.warning('Restore operation failed')
             return False
@@ -475,6 +489,8 @@ def sync_from_backup() -> bool:
         logger.error(f'Restore operation failed: {e}')
         status['last_error'] = str(e)
         status['db_status'] = 'error'
+        status['status'] = 'error'
+        status['message'] = str(e)
         write_status(status)
         return False
 
