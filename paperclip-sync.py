@@ -404,20 +404,16 @@ def sync_to_backup() -> bool:
         # Step 1: Backup database
         dump_file, success = backup_database()
         if not success or not dump_file:
-            status['last_error'] = 'Database backup failed'
-            status['db_status'] = 'error'
-            status['status'] = 'error'
-            status['message'] = 'Database backup failed'
+            status.update({'last_error': 'Database backup failed', 'db_status': 'error',
+                           'status': 'error', 'message': 'Backup failed: pg_dump error'})
             write_status(status)
             return False
 
         # Step 2: Create tarball
         tarball_file, success = create_backup_tarball(dump_file)
         if not success or not tarball_file:
-            status['last_error'] = 'Tarball creation failed'
-            status['db_status'] = 'error'
-            status['status'] = 'error'
-            status['message'] = 'Tarball creation failed'
+            status.update({'last_error': 'Tarball creation failed', 'db_status': 'error',
+                           'status': 'error', 'message': 'Backup failed: tarball too large or I/O error'})
             write_status(status)
             return False
 
@@ -425,12 +421,13 @@ def sync_to_backup() -> bool:
         success = sync_to_hf(tarball_file)
 
         # Update status
-        status['last_sync_time'] = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+        ts = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+        status['last_sync_time'] = ts
         status['db_status'] = 'connected' if success else 'error'
         status['last_error'] = None if success else 'Upload failed'
-        status['status'] = 'connected' if success else 'error'
-        status['message'] = 'Backup synced OK' if success else 'Backup sync failed'
         status['sync_count'] = status.get('sync_count', 0) + 1
+        status['status'] = 'success' if success else 'error'
+        status['message'] = 'Backup uploaded to HF Dataset' if success else 'Upload to HF Dataset failed'
 
         write_status(status)
 
@@ -446,7 +443,7 @@ def sync_to_backup() -> bool:
         status['last_error'] = str(e)
         status['db_status'] = 'error'
         status['status'] = 'error'
-        status['message'] = str(e)
+        status['message'] = f'Backup error: {e}'
         write_status(status)
         return False
 
@@ -463,16 +460,16 @@ def sync_from_backup() -> bool:
             # No backup exists yet (first boot) — not an error
             status['db_status'] = 'connected'
             status['last_error'] = None
-            status['status'] = 'connected'
-            status['message'] = 'No prior backup — fresh instance'
+            status['status'] = 'configured'
+            status['message'] = 'Fresh instance — no prior backup'
             write_status(status)
             logger.info('No prior backup — fresh instance')
             return True
         elif success:
             status['db_status'] = 'connected'
             status['last_error'] = None
-            status['status'] = 'connected'
-            status['message'] = 'Restore OK'
+            status['status'] = 'restored'
+            status['message'] = 'Restored from HF Dataset'
             write_status(status)
             logger.info('Restore OK')
             return True
@@ -480,7 +477,7 @@ def sync_from_backup() -> bool:
             status['db_status'] = 'error'
             status['last_error'] = 'Restore failed'
             status['status'] = 'error'
-            status['message'] = 'Restore operation failed'
+            status['message'] = 'Restore from HF Dataset failed'
             write_status(status)
             logger.warning('Restore operation failed')
             return False
@@ -490,7 +487,7 @@ def sync_from_backup() -> bool:
         status['last_error'] = str(e)
         status['db_status'] = 'error'
         status['status'] = 'error'
-        status['message'] = str(e)
+        status['message'] = f'Restore error: {e}'
         write_status(status)
         return False
 
