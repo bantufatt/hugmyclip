@@ -3,7 +3,7 @@ set -euo pipefail
 
 umask 0077
 
-# ── Config ────────────────────────────────────────────────────────────────────
+# ── Config ────────────────────────────────────────────────────────────┄
 export DATABASE_URL="${DATABASE_URL:-postgres://postgres:paperclip@localhost:5432/paperclip}"
 export PORT="${PORT:-3100}"
 export SERVE_UI="${SERVE_UI:-true}"
@@ -21,6 +21,12 @@ export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-/home/paperclip/.config}"
 export SYNC_INTERVAL="${SYNC_INTERVAL:-3600}"
 export SYNC_MAX_FILE_BYTES="${SYNC_MAX_FILE_BYTES:-52428800}"
 export BACKUP_DATASET_NAME="${BACKUP_DATASET_NAME:-huggingclip-backup}"
+
+SYNC_INTERVAL_CLEAN=$(printf '%s' "$SYNC_INTERVAL" | tr -cd '0-9')
+if [ -z "$SYNC_INTERVAL_CLEAN" ] || [ "$SYNC_INTERVAL_CLEAN" -lt 60 ]; then
+    SYNC_INTERVAL_CLEAN=60
+fi
+export SYNC_INTERVAL="$SYNC_INTERVAL_CLEAN"
 
 # Derive public URL from HF Space host
 if [ -z "${PAPERCLIP_PUBLIC_URL:-}" ] && [ -n "${SPACE_HOST:-}" ]; then
@@ -97,7 +103,7 @@ if [ -z "${GEMINI_API_KEY:-}" ] && [ "${NVIDIA_KEY_COUNT}" -eq 0 ] && [ -z "${NV
     echo ""
 fi
 
-# ── Banner ────────────────────────────────────────────────────────────────────
+# ── Banner ───────────────────────────────────────────────────────────┄
 echo ""
 echo "  ╔════════════════════════════════════╗"
 echo "  ║          HuggingClip               ║"
@@ -110,7 +116,7 @@ echo "Deploy mode  : ${PAPERCLIP_DEPLOYMENT_MODE}"
 echo "Sync every   : ${SYNC_INTERVAL}s"
 echo ""
 
-# ── PostgreSQL ────────────────────────────────────────────────────────────────
+# ── PostgreSQL ──────────────────────────────────────────────────────────┄
 PG_VERSION=$(ls /usr/lib/postgresql/ 2>/dev/null | sort -V | tail -1)
 if [ -z "$PG_VERSION" ]; then
     echo "ERROR: PostgreSQL not found"
@@ -181,7 +187,7 @@ else
     echo "HF_TOKEN not set — running without backup persistence"
 fi
 
-# ── Cloudflare Proxy ──────────────────────────────────────────────────────────
+# ── Cloudflare Proxy ────────────────────────────────────────────────────────┄
 if [ -n "${CLOUDFLARE_WORKERS_TOKEN:-}" ]; then
     echo "Setting up Cloudflare proxy..."
     python3 /app/cloudflare-proxy-setup.py 2>&1 || echo "Cloudflare setup failed, continuing without proxy"
@@ -297,7 +303,7 @@ print(f"  Config written to {config_path}")
 PYEOF
 fi
 
-# ── Graceful shutdown ─────────────────────────────────────────────────────────
+# ── Graceful shutdown ────────────────────────────────────────────────────────
 cleanup() {
     echo "Shutting down — syncing data..."
 
